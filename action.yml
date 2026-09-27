@@ -1,0 +1,50 @@
+name: demogod
+description: Records a terminal or browser demo from a tape, with demogod.
+author: Izel Nakri
+branding:
+  icon: film
+  color: purple
+
+inputs:
+  tape:
+    description: The tape to record, or several separated by spaces.
+    required: true
+  output:
+    description: Where to save instead of the tape's Output, e.g. docs/demo.gif. Several are separated by spaces.
+    required: false
+    default: ''
+  version:
+    description: >-
+      The demogod release to use, e.g. v0.2.0. By default, the one this action is pinned to:
+      @v0.2.0 uses v0.2.0, and @v0 the newest v0.x.y.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install demogod
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        DEMOGOD_INSTALL: ${{ runner.temp }}/demogod
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if [ -z "$VERSION" ]; then
+          case "$ACTION_REF" in
+            v[0-9]*.*.*) VERSION="$ACTION_REF" ;;
+            v[0-9]*) VERSION=$(gh release list --repo izelnakri/demogod --json tagName --jq ".[].tagName | select(startswith(\"$ACTION_REF.\"))" | head -1) ;;
+          esac
+        fi
+        DEMOGOD_VERSION="${VERSION:-latest}" sh "${{ github.action_path }}/install.sh"
+        echo "$DEMOGOD_INSTALL" >> "$GITHUB_PATH"
+    - name: Record
+      shell: bash
+      env:
+        TAPES: ${{ inputs.tape }}
+        OUTPUTS: ${{ inputs.output }}
+      run: |
+        arguments=()
+        for output in $OUTPUTS; do arguments+=(--output "$output"); done
+        demogod $TAPES "${arguments[@]}"

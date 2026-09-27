@@ -1,0 +1,272 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A pull request pushed again cancels its stale run; main and tags always finish, since they
+# release.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  NO_COLOR: 1
+
+# `if: github.event_name != 'pull_request' || …fork` on the first jobs: a branch in this
+# repository fires both `push` and `pull_request` for the same commit, so the pull_request run is
+# skipped; a fork only fires pull_request, so it runs.
+jobs:
+  lint:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo doc --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+      # Builds the crate from the tarball crates.io would get, so a file missing from `include`
+      # fails here instead of for the first person to `cargo install` it.
+      - run: cargo package --locked
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: node --check npm/index.js && node --check npm/binary.js && node --check npm/bin/demogod.js && node --check scripts/npm-packages.mjs
+      - run: npx --yes --package typescript@5 tsc --noEmit --strict npm/index.d.ts
+
+  msrv:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.88
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --all-targets --locked
+
+  test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Chrome for Testing has no Linux arm64 build; the browser tests say so there and pass.
+      - uses: browser-actions/setup-chrome@v2
+        if: matrix.os != 'ubuntu-24.04-arm'
+        id: chrome
+      - run: cargo test --locked
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm test
+        working-directory: npm
+
+  coverage:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+      - run: cargo llvm-cov --locked --lcov --output-path lcov.info
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+      - run: cargo llvm-cov report --summary-only
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Every push builds every release binary, so the first build of a target is never the release
+  # itself. Only the jobs below this one wait for a tag.
+  build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest, runs: true }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm, runs: true }
+          - { target: x86_64-apple-darwin, os: macos-latest, runs: false }
+          - { target: aarch64-apple-darwin, os: macos-latest, runs: true }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, runs: true }
+          - { target: aarch64-pc-windows-msvc, os: windows-latest, runs: false }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: sudo apt-get update && sudo apt-get install -y musl-tools
+        if: contains(matrix.target, 'musl')
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Smoke test
+        if: matrix.runs
+        shell: bash
+        run: |
+          binary=target/${{ matrix.target }}/release/demogod
+          "$binary" --version
+          "$binary" check examples/hello.tape
+          if [ "$RUNNER_OS" != Windows ]; then
+            "$binary" examples/hello.tape -o smoke.gif -o smoke.cast
+            test -s smoke.gif && test -s smoke.cast
+          fi
+      # ConPTY is not exercised by the test suite, so a recording on Windows is tried here and
+      # reported, without failing the build over it.
+      - name: Record on Windows
+        if: runner.os == 'Windows' && matrix.runs
+        continue-on-error: true
+        shell: bash
+        run: target/${{ matrix.target }}/release/demogod examples/hello.tape -o smoke.gif && test -s smoke.gif
+      - name: Archive
+        shell: bash
+        run: |
+          name=demogod-${{ matrix.target }}
+          mkdir "$name"
+          cp README.md LICENSE "$name/"
+          if [ "$RUNNER_OS" = Windows ]; then
+            cp target/${{ matrix.target }}/release/demogod.exe "$name/"
+            7z a -tzip "$name.zip" "$name" > /dev/null
+          else
+            cp target/${{ matrix.target }}/release/demogod "$name/"
+            tar -czf "$name.tar.gz" "$name"
+          fi
+      - uses: actions/upload-artifact@v5
+        with:
+          name: demogod-${{ matrix.target }}
+          path: demogod-${{ matrix.target }}.*
+          if-no-files-found: error
+          retention-days: 7
+
+  # ── releases (tags only) ──────────────────────────────────────────────────────────────────
+
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [lint, msrv, test, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: The tag is the version in Cargo.toml
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME, Cargo.toml $version"; exit 1; }
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: demogod-*
+          merge-multiple: true
+          path: artifacts
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd artifacts && sha256sum -- * > checksums.txt)
+          version="${GITHUB_REF_NAME#v}"
+          awk "/^## \[${version//./\\.}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" artifacts/* --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+      # `uses: izelnakri/demogod@v0` follows the latest v0.x.y.
+      - name: Move the major version's tag
+        run: |
+          major="${GITHUB_REF_NAME%%.*}"
+          git tag --force "$major" "$GITHUB_REF_NAME^{commit}"
+          git push --force origin "refs/tags/$major"
+
+  # Published by CI so the package carries provenance. The first publish of a new crate needs a
+  # CARGO_REGISTRY_TOKEN secret; after that, trusted publishing (crates.io → Settings → Trusted
+  # Publishing → this workflow) needs no secret at all.
+  crates-io:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [github-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rust-lang/crates-io-auth-action@v1
+        if: env.CARGO_REGISTRY_TOKEN == ''
+        id: auth
+      - run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+
+  # The npm packages are assembled and packed on every push, so a packaging mistake shows up on
+  # a pull request; they are published only for a tag. NPM_TOKEN for the first publish, trusted
+  # publishing after it. Platform packages go first, so `demogod` never points at binaries that
+  # are not there yet.
+  npm:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork
+    needs: [lint, msrv, test, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: demogod-*
+          merge-multiple: true
+          path: artifacts
+      - run: node scripts/npm-packages.mjs artifacts dist/npm
+      - name: Pack
+        run: for directory in dist/npm/*; do (cd "$directory" && npm pack --dry-run); done
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for directory in dist/npm/demogod-*-* dist/npm/demogod; do
+            name=$(node -p "require('./$directory/package.json').name")
+            version=$(node -p "require('./$directory/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already published"
+            else
+              (cd "$directory" && npm publish --access public --provenance)
+            fi
+          done

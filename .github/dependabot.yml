@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # upload-artifact and download-artifact share an artifact format, so they move together.
+      artifact-actions:
+        patterns: ['actions/upload-artifact', 'actions/download-artifact']
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      cargo:
+        patterns: ['*']

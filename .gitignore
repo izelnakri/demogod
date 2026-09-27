@@ -1,0 +1,11 @@
+/target
+node_modules/
+/dist/
+/npm/README.md
+/npm/LICENSE
+/tmp/
+*.profraw
+lcov.info
+/docs/demo/hello.gif
+/examples/*.gif
+/examples/*.cast

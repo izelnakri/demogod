@@ -1,0 +1,57 @@
+{
+  "name": "demogod",
+  "version": "0.1.0",
+  "description": "Records terminal and browser demos from a tape: GIF, MP4, WebM, PNG and asciicast, deterministic and fast, from one static binary.",
+  "keywords": [
+    "demo",
+    "gif",
+    "terminal",
+    "screencast",
+    "vhs",
+    "recording",
+    "cli",
+    "browser",
+    "asciinema"
+  ],
+  "homepage": "https://github.com/izelnakri/demogod#readme",
+  "bugs": "https://github.com/izelnakri/demogod/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/izelnakri/demogod.git",
+    "directory": "npm"
+  },
+  "license": "MIT",
+  "author": "Izel Nakri <contact@izelnakri.com>",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./index.d.ts",
+  "bin": {
+    "demogod": "bin/demogod.js"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "binary.js",
+    "bin/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "optionalDependencies": {
+    "demogod-darwin-arm64": "0.1.0",
+    "demogod-darwin-x64": "0.1.0",
+    "demogod-linux-arm64": "0.1.0",
+    "demogod-linux-x64": "0.1.0",
+    "demogod-win32-arm64": "0.1.0",
+    "demogod-win32-x64": "0.1.0"
+  }
+}

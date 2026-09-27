@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Todo</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font: 18px/1.5 system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; }
+  header { padding: 22px 28px; background: #313244; font-size: 22px; font-weight: 700; }
+  header span { color: #cba6f7; }
+  main { padding: 26px 28px; }
+  form { display: flex; gap: 10px; }
+  input { flex: 1; font: inherit; padding: 9px 14px; color: inherit; background: #181825; border: 2px solid #45475a; border-radius: 10px; outline: none; }
+  input:focus { border-color: #cba6f7; }
+  button { font: inherit; font-weight: 600; padding: 9px 20px; border: 0; border-radius: 10px; background: #cba6f7; color: #1e1e2e; cursor: pointer; }
+  button:hover { background: #f5c2e7; }
+  ul { list-style: none; padding: 0; margin: 22px 0 0; }
+  li { padding: 12px 16px; margin-bottom: 10px; background: #313244; border-radius: 10px; }
+  li::before { content: "○  "; color: #a6e3a1; }
+  li.new { animation: arrive 400ms ease-out; }
+  @keyframes arrive { from { opacity: 0; transform: translateY(-8px); } }
+</style>
+</head>
+<body>
+<header>Todo <span>·</span> a page to demo</header>
+<main>
+  <form id="form">
+    <input id="new" placeholder="What needs doing?" autocomplete="off">
+    <button>Add</button>
+  </form>
+  <ul id="list">
+    <li>Write a tape</li>
+    <li>Record it</li>
+  </ul>
+</main>
+<script>
+  document.getElementById('form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const input = document.getElementById('new');
+    if (!input.value.trim()) return;
+    const item = Object.assign(document.createElement('li'), { textContent: input.value, className: 'new' });
+    document.getElementById('list').append(item);
+    input.value = '';
+  });
+</script>
+</body>
+</html>
