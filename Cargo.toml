@@ -20,7 +20,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Each one is here because writing it would be worse than depending on it:
-color_quant = "1.1"                                         # NeuQuant, for GIF frames that hold more than 256 colours (browser panes)
+color_quant = "2.0"                                         # NeuQuant, for GIF frames that hold more than 256 colours (browser panes)
 fontdue = "0.9"                                             # glyph rasterizer: no system font stack, no C
 gif = { version = "0.14", default-features = false, features = ["std"] }
 lexopt = "0.3"                                              # argv, without a derive macro
