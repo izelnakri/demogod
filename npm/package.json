@@ -1,6 +1,6 @@
 {
   "name": "demogod",
-  "version": "0.1.0",
+  "version": "0.0.9",
   "description": "Records terminal and browser demos from a tape: GIF, MP4, WebM, PNG and asciicast, deterministic and fast, from one static binary.",
   "keywords": [
     "demo",
@@ -47,11 +47,11 @@
     "test": "node --test"
   },
   "optionalDependencies": {
-    "demogod-darwin-arm64": "0.1.0",
-    "demogod-darwin-x64": "0.1.0",
-    "demogod-linux-arm64": "0.1.0",
-    "demogod-linux-x64": "0.1.0",
-    "demogod-win32-arm64": "0.1.0",
-    "demogod-win32-x64": "0.1.0"
+    "demogod-darwin-arm64": "0.0.9",
+    "demogod-darwin-x64": "0.0.9",
+    "demogod-linux-arm64": "0.0.9",
+    "demogod-linux-x64": "0.0.9",
+    "demogod-win32-arm64": "0.0.9",
+    "demogod-win32-x64": "0.0.9"
   }
 }

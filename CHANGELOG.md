@@ -1,3 +1,5 @@
 # Changelog
 
-Every release, from its commits: `make release` writes each section with git-cliff.
+## [0.0.9] - 2026-09-27
+
+
