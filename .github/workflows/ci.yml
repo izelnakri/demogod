@@ -41,7 +41,7 @@ jobs:
       # Builds the crate from the tarball crates.io would get, so a file missing from `include`
       # fails here instead of for the first person to `cargo install` it.
       - run: cargo package --locked
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - run: node --check npm/index.js && node --check npm/binary.js && node --check npm/bin/demogod.js && node --check scripts/npm-packages.mjs
@@ -77,7 +77,7 @@ jobs:
       - run: cargo test --locked
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - run: npm test
@@ -244,7 +244,7 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
